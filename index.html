@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <title>Bot League — M0 Fight Viewer</title>
+    <style>
+      :root {
+        --bg: #0b0d10;
+        --panel: #14171c;
+        --line: #2c333d;
+        --text: #e8edf2;
+        --dim: #9aa7b5;
+        --hot: #ffb300;
+      }
+      * { box-sizing: border-box; margin: 0; }
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 12px;
+        gap: 10px;
+      }
+      header {
+        width: min(960px, 100%);
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      h1 { font-size: 20px; letter-spacing: 3px; color: var(--hot); }
+      h1 span { color: var(--dim); font-size: 12px; letter-spacing: 1px; }
+      #matchup { font-size: 14px; }
+      #matchup b { font-weight: 700; }
+      #stage {
+        position: relative;
+        width: min(960px, 100%);
+        aspect-ratio: 800 / 520;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        overflow: hidden;
+        background: var(--panel);
+      }
+      #arena, #arena canvas { width: 100%; height: 100%; display: block; }
+      #overlay {
+        position: absolute;
+        inset: 0;
+        background: rgba(8, 10, 13, 0.78);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 18px;
+        z-index: 5;
+      }
+      #overlay.hidden { display: none; }
+      #overlay-title { font-size: clamp(18px, 4vw, 34px); letter-spacing: 2px; text-align: center; padding: 0 16px; }
+      #bark {
+        width: min(960px, 100%);
+        min-height: 26px;
+        color: var(--dim);
+        font-size: 15px;
+        transition: color 0.15s, transform 0.15s;
+      }
+      #bark.flash { color: var(--hot); transform: scale(1.02); }
+      footer {
+        width: min(960px, 100%);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .btn-row { display: flex; gap: 10px; }
+      button {
+        background: var(--panel);
+        color: var(--text);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 10px 18px;
+        font: inherit;
+        font-size: 14px;
+        cursor: pointer;
+        touch-action: manipulation;
+      }
+      button:hover { border-color: var(--hot); color: var(--hot); }
+      #seed { color: var(--dim); font-size: 12px; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>BOT LEAGUE <span>M0 — fight night preview</span></h1>
+      <div id="matchup"><b id="name-a"></b> <span style="color: var(--dim)">vs</span> <b id="name-b"></b></div>
+    </header>
+    <div id="stage">
+      <div id="arena"></div>
+      <div id="overlay" class="hidden">
+        <div id="overlay-title"></div>
+        <div class="btn-row">
+          <button id="btn-again">NEXT FIGHT</button>
+          <button id="btn-rewatch">REWATCH</button>
+        </div>
+      </div>
+    </div>
+    <div id="bark"></div>
+    <footer>
+      <div class="btn-row">
+        <button id="btn-new">NEW FIGHT</button>
+        <button id="btn-replay">REPLAY SEED</button>
+      </div>
+      <div id="seed"></div>
+    </footer>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
