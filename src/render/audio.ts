@@ -39,6 +39,7 @@ export function unlockAudio(): void {
 export function setMuted(m: boolean): void {
   muted = m;
   localStorage.setItem('botleague_muted', m ? '1' : '0');
+  if (m) music.stop();
 }
 
 export function isMuted(): boolean {
@@ -232,3 +233,131 @@ export const sfx = {
     }
   },
 };
+
+// --- Workshop music -----------------------------------------------------------
+// A hand-written 4-bar lo-fi chiptune loop in A minor (Am | F | C | G), ~84bpm,
+// scheduled with the classic Web Audio lookahead pattern. Deliberately quiet —
+// background hum for the garage, not a soundtrack. Stops during fights: the
+// crowd IS the fight music (see ART_DIRECTION.md).
+
+const BPM = 84;
+const STEP_SEC = 60 / BPM / 2; // 8th notes
+const STEPS = 32; // 4 bars of 8
+
+// A-minor pentatonic noodle; null = rest. One entry per 8th note.
+const MELODY: Array<number | null> = [
+  440, null, 523.25, null, 659.26, null, 587.33, 523.25, // Am
+  null, 440, null, 523.25, null, 392, 440, null,         // F
+  392, null, 523.25, null, 587.33, null, 523.25, 440,    // C
+  null, 392, null, 329.63, 392, null, 440, null,         // G
+];
+const BASS_ROOTS = [110, 87.31, 130.81, 98]; // A2 F2 C3 G2, one per bar
+const PADS: number[][] = [
+  [220, 261.63, 329.63], // Am
+  [174.61, 220, 261.63], // F
+  [261.63, 329.63, 392], // C
+  [196, 246.94, 293.66], // G
+];
+
+let musicGain: GainNode | null = null;
+let musicTimer: number | undefined;
+let musicStep = 0;
+let nextNoteTime = 0;
+let musicPlaying = false;
+
+function mtone(
+  c: AudioContext,
+  at: number,
+  freq: number,
+  duration: number,
+  type: OscillatorType,
+  gain: number,
+): void {
+  const osc = c.createOscillator();
+  const g = c.createGain();
+  osc.type = type;
+  osc.frequency.value = freq;
+  g.gain.setValueAtTime(0.0001, at);
+  g.gain.exponentialRampToValueAtTime(gain, at + 0.02);
+  g.gain.exponentialRampToValueAtTime(0.001, at + duration);
+  osc.connect(g).connect(musicGain!);
+  osc.start(at);
+  osc.stop(at + duration + 0.05);
+}
+
+function playMusicStep(c: AudioContext, step: number, at: number): void {
+  const bar = Math.floor(step / 8);
+  const inBar = step % 8;
+
+  if (inBar === 0) {
+    // Pad: the bar's triad, soft triangles.
+    for (const f of PADS[bar]) mtone(c, at, f, STEP_SEC * 7.5, 'triangle', 0.035);
+  }
+  if (inBar === 0 || inBar === 4) {
+    mtone(c, at, BASS_ROOTS[bar] * (inBar === 4 ? 2 : 1), STEP_SEC * 2.2, 'triangle', 0.1);
+  }
+  const note = MELODY[step];
+  if (note) mtone(c, at, note, STEP_SEC * 1.6, 'square', 0.028);
+  // Faint hat tick on the offbeats.
+  if (inBar % 2 === 1 && noiseBuffer) {
+    const src = c.createBufferSource();
+    src.buffer = noiseBuffer;
+    const filter = c.createBiquadFilter();
+    filter.type = 'highpass';
+    filter.frequency.value = 7000;
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.018, at);
+    g.gain.exponentialRampToValueAtTime(0.001, at + 0.04);
+    src.connect(filter).connect(g).connect(musicGain!);
+    src.start(at);
+    src.stop(at + 0.06);
+  }
+}
+
+export const music = {
+  start(): void {
+    if (muted || musicPlaying) return;
+    const c = ensureContext();
+    if (!c) return;
+    if (!musicGain) {
+      musicGain = c.createGain();
+      musicGain.connect(master!);
+    }
+    musicGain.gain.cancelScheduledValues(c.currentTime);
+    musicGain.gain.setValueAtTime(0.0001, c.currentTime);
+    musicGain.gain.exponentialRampToValueAtTime(0.6, c.currentTime + 1.2); // fade in
+    musicPlaying = true;
+    nextNoteTime = c.currentTime + 0.1;
+    window.clearInterval(musicTimer);
+    musicTimer = window.setInterval(() => {
+      // Until the first real user gesture the context stays suspended and its
+      // clock is frozen — don't pile up scheduled notes.
+      if (!musicPlaying || c.state !== 'running') return;
+      if (nextNoteTime < c.currentTime) nextNoteTime = c.currentTime + 0.05;
+      while (nextNoteTime < c.currentTime + 0.35) {
+        playMusicStep(c, musicStep, nextNoteTime);
+        musicStep = (musicStep + 1) % STEPS;
+        nextNoteTime += STEP_SEC;
+      }
+    }, 40);
+  },
+
+  stop(): void {
+    if (!musicPlaying) return;
+    musicPlaying = false;
+    window.clearInterval(musicTimer);
+    if (ctx && musicGain) {
+      musicGain.gain.cancelScheduledValues(ctx.currentTime);
+      musicGain.gain.setValueAtTime(musicGain.gain.value, ctx.currentTime);
+      musicGain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.5); // fade out
+    }
+  },
+
+  isPlaying(): boolean {
+    return musicPlaying;
+  },
+};
+
+// Debug handle so the live module instance is inspectable from the console
+// (Vite HMR can otherwise leave a stale duplicate when probing via import()).
+(window as unknown as { __audio: object }).__audio = { music, sfx, setMuted, isMuted };

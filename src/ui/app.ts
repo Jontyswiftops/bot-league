@@ -23,7 +23,7 @@ import {
 } from '../sim/league';
 import { partById, resolveBuild } from '../data';
 import { loadGame, saveGame, clearGame } from '../save/storage';
-import { isMuted, setMuted, sfx, unlockAudio } from '../render/audio';
+import { isMuted, music, setMuted, sfx, unlockAudio } from '../render/audio';
 
 type ScreenId = 'garage' | 'shop' | 'league' | 'fight' | 'results';
 
@@ -54,8 +54,16 @@ export function initApp(g: Phaser.Game): void {
   saveGame(state);
 
   document.addEventListener('click', onClick);
-  // Browsers gate audio behind a user gesture — first press unlocks it.
-  document.addEventListener('pointerdown', unlockAudio, { once: true });
+  // Browsers gate audio behind a user gesture — first press unlocks it and
+  // kicks off the workshop music if we're on a management screen.
+  document.addEventListener(
+    'pointerdown',
+    () => {
+      unlockAudio();
+      if (screen !== 'fight') music.start();
+    },
+    { once: true },
+  );
   updateMuteButton();
   document.addEventListener('fight:bark', (e) => {
     const bark = $('bark');
@@ -91,6 +99,11 @@ function show(next: ScreenId): void {
     switchScene('fight', { seed: setup.seed, botA: setup.player, botB: setup.opponent });
     resetCommandBar();
   }
+
+  // Workshop music runs everywhere except the arena — there, the crowd is
+  // the soundtrack. (start() is a no-op while muted or already playing.)
+  if (next === 'fight') music.stop();
+  else music.start();
 
   renderHud();
   if (next === 'garage') renderGarage();
@@ -134,6 +147,7 @@ function onClick(e: MouseEvent): void {
       break;
     case 'mute':
       setMuted(!isMuted());
+      if (!isMuted() && screen !== 'fight') music.start();
       updateMuteButton();
       break;
     case 'repair':
