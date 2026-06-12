@@ -42,6 +42,6 @@ export function computeStats(bot: BotBuild): DerivedStats {
     reactorRegen: bot.core.regen * (coreDisabled ? 0.35 : coreScale),
     // Familiarity: a chip that has sparred with this frame aims better —
     // up to +0.10 Wits at max familiarity (50).
-    wits: Math.min(1, 0.45 + bot.chip.grade * 0.12 + Math.min(50, bot.familiarity ?? 0) * 0.002),
+    wits: Math.min(1, 0.45 + bot.chip.grade * 0.085 + Math.min(50, bot.familiarity ?? 0) * 0.002),
   };
 }

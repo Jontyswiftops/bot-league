@@ -20,4 +20,20 @@ export const CHIPS: ChipDef[] = [
     kind: 'chip', id: 'chip_glass_viper', name: 'Glass Viper', weight: 2, cost: 290, grade: 2,
     weights: { aggression: 0.9, caution: 0.5, opportunism: 0.7, ferocity: 0.3, discipline: 0.6 },
   },
+  {
+    kind: 'chip', id: 'chip_matador', name: 'Matador', weight: 2, cost: 310, grade: 2,
+    weights: { aggression: 0.3, caution: 0.55, opportunism: 0.9, ferocity: 0.2, discipline: 0.7 },
+  },
+  {
+    kind: 'chip', id: 'chip_feral', name: 'Feral', weight: 2, cost: 330, grade: 2,
+    weights: { aggression: 1.0, caution: 0.05, opportunism: 0.25, ferocity: 1.0, discipline: 0.1 },
+  },
+  {
+    kind: 'chip', id: 'chip_warden', name: 'Warden', weight: 2, cost: 520, grade: 3,
+    weights: { aggression: 0.5, caution: 0.7, opportunism: 0.6, ferocity: 0.15, discipline: 1.0 },
+  },
+  {
+    kind: 'chip', id: 'chip_overclock', name: 'Overclock', weight: 2, cost: 560, grade: 3,
+    weights: { aggression: 0.75, caution: 0.3, opportunism: 0.8, ferocity: 0.6, discipline: 0.5 },
+  },
 ];

@@ -19,7 +19,10 @@ export interface ChassisDef extends BasePart {
   agility: number;
 }
 
-export type WeaponArchetype = 'spinner'; // M3 adds 'hammer' | 'ram'
+// spinner: fast cadence, steady chip damage.
+// hammer:  slow, huge swings that CRUSH part condition.
+// ram:     contact charges — weight and speed are the weapon.
+export type WeaponArchetype = 'spinner' | 'hammer' | 'ram';
 
 export interface WeaponDef extends BasePart {
   kind: 'weapon';

@@ -21,6 +21,11 @@ import { ARMOURS, CHASSIS, CORES, WEAPONS } from '../data/parts';
 import { CHIPS } from '../data/chips';
 
 export const SPONSOR_FAME = 3;
+export const CHAMPIONSHIP_FAME = 40;
+export const TITLE_ENTRY = 500;
+export const TITLE_PRIZE = 2500;
+export const TITLE_FAME = 10;
+export const DEFENSE_PRIZE = 1500;
 export const SPONSOR_WEEKLY = 75;
 export const SPONSOR_WIN_BONUS = 50;
 export const SCRAP_VALUE = 10;
@@ -65,7 +70,7 @@ export function newGame(seed: number): GameState {
     chipFamiliarity: 0,
   };
   const state: GameState = {
-    version: 2,
+    version: 3,
     seed,
     week: 1,
     cash: 800,
@@ -81,6 +86,7 @@ export function newGame(seed: number): GameState {
     card: [],
     rivalRecords: {},
     record: { wins: 0, losses: 0 },
+    champion: false,
   };
   rollWeek(state);
   return state;
@@ -208,6 +214,38 @@ function generateCard(state: GameState): MatchOffer[] {
       prize: tier.prize,
       famePrize: state.tier * 2,
     });
+  }
+
+  // The summit: at fame 40 in the Circuit, The Duchess puts the belt up.
+  // As champion, you defend it every third week for serious money.
+  if (state.tier === 3) {
+    const titleShot = !state.champion && state.fame >= CHAMPIONSHIP_FAME;
+    const defense = state.champion && state.week % 3 === 0;
+    if (titleShot || defense) {
+      const duchess = RIVALS_BY_TIER[3][0]; // Guillotine, in title trim
+      offers.push({
+        key: `w${state.week}_title`,
+        rivalId: duchess.id,
+        builderName: titleShot ? duchess.builderName : 'Challenger of the week',
+        botName: titleShot ? 'GUILLOTINE PRIME' : pick(rng, RIVALS_BY_TIER[3]).botName,
+        attitude: titleShot
+          ? 'The belt has a name on it. Hers.'
+          : 'They want what you have.',
+        accent: duchess.accent,
+        parts: {
+          chassis: 'ch_atlas_hull',
+          weapon: 'wp_god_gavel',
+          armour: 'ar_reactive_shell',
+          core: 'co_fusion_brick',
+          chip: 'chip_warden',
+        },
+        condition: { chassis: 100, weapon: 100, armour: 100, core: 100, chip: 100 },
+        entryFee: titleShot ? TITLE_ENTRY : 0,
+        prize: titleShot ? TITLE_PRIZE : DEFENSE_PRIZE,
+        famePrize: titleShot ? TITLE_FAME : 3,
+        title: true,
+      });
+    }
   }
   return offers;
 }
@@ -427,6 +465,8 @@ export interface SettleReport {
   /** Parts your wrench hand pulled back from the scrap pile. */
   salvaged: Slot[];
   bark: string | null;
+  /** This fight just won the Circuit belt. */
+  titleWon: boolean;
 }
 
 /**
@@ -477,7 +517,20 @@ export function settleMatch(
     bark = rival ? (won ? rival.winBark : rival.lossBark) : null;
   }
 
-  return { won, result, prize, sponsorBonus, fameGained, damage, salvaged, bark };
+  let titleWon = false;
+  if (offer.title) {
+    if (won && !state.champion) {
+      state.champion = true;
+      titleWon = true;
+      bark = '"...Keep it polished. I\'ll be back for it." — The Duchess';
+    } else if (!won && state.champion && offer.entryFee === 0) {
+      // Lost a defense: the belt walks.
+      state.champion = false;
+      bark = '"GIVE IT HERE." The Circuit has a new champion.';
+    }
+  }
+
+  return { won, result, prize, sponsorBonus, fameGained, damage, salvaged, bark, titleWon };
 }
 
 export interface WeekReport {

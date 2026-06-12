@@ -43,6 +43,7 @@ export class BotView {
   private readonly shadow: Phaser.GameObjects.Ellipse;
   private readonly smoke: Phaser.GameObjects.Particles.ParticleEmitter;
   private readonly frame: Frame;
+  private readonly archetype: string;
   private spinnerDead = false;
   private walkPhase = 0;
   private fallen = false;
@@ -50,6 +51,7 @@ export class BotView {
   constructor(scene: Phaser.Scene, bot: BotFightState, key: string) {
     const accent = bot.build.accent;
     const f = (this.frame = frameFor(bot.build.chassis.id));
+    this.archetype = bot.build.weapon.archetype;
 
     const g = scene.add.graphics();
 
@@ -81,16 +83,38 @@ export class BotView {
     g.generateTexture(`${key}_arm`, 18, 8);
     g.clear();
 
-    // Saw disc with teeth — radius scales with weapon damage.
+    // Weapon visual by archetype — the build must read at a glance.
+    const archetype = bot.build.weapon.archetype;
     const wr = 7 + bot.build.weapon.damage * 0.45;
-    g.fillStyle(STEEL_DARK);
-    g.fillCircle(wr, wr, wr);
-    g.fillStyle(TOOTH);
-    for (let i = 0; i < 6; i++) {
-      const a = (i / 6) * Math.PI * 2;
-      g.fillCircle(wr + Math.cos(a) * (wr - 2.5), wr + Math.sin(a) * (wr - 2.5), 2.8);
+    if (archetype === 'spinner') {
+      // Toothed saw disc; radius scales with damage. Spins at runtime.
+      g.fillStyle(STEEL_DARK);
+      g.fillCircle(wr, wr, wr);
+      g.fillStyle(TOOTH);
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2;
+        g.fillCircle(wr + Math.cos(a) * (wr - 2.5), wr + Math.sin(a) * (wr - 2.5), 2.8);
+      }
+      g.generateTexture(`${key}_saw`, wr * 2, wr * 2);
+    } else if (archetype === 'hammer') {
+      // Blunt slab head on the arm. Damage = chunkier slab.
+      const hw = wr * 1.5;
+      const hh = wr * 1.1;
+      g.fillStyle(STEEL_DARK);
+      g.fillRoundedRect(0, 0, hw, hh, 3);
+      g.fillStyle(TOOTH);
+      g.fillRect(0, 2, 3, hh - 4);
+      g.generateTexture(`${key}_saw`, hw, hh);
+    } else {
+      // Ram: a forward wedge. The chassis is the weapon; this is its tooth.
+      const ww = wr * 1.7;
+      const wh = wr * 1.5;
+      g.fillStyle(STEEL_DARK);
+      g.fillTriangle(0, 0, ww, wh / 2, 0, wh);
+      g.fillStyle(TOOTH);
+      g.fillTriangle(0, wh * 0.25, ww * 0.45, wh / 2, 0, wh * 0.75);
+      g.generateTexture(`${key}_saw`, ww, wh);
     }
-    g.generateTexture(`${key}_saw`, wr * 2, wr * 2);
     g.clear();
 
     // Armour plate — chunkier armour part = chunkier plates.
@@ -178,8 +202,9 @@ export class BotView {
     this.body.y = moving ? -Math.abs(Math.sin(this.walkPhase)) * 2.5 : 0;
 
     // Saw spin sells the energy economy: fast when charged, crawling when
-    // drained, stopped when the weapon part is destroyed.
-    if (!this.spinnerDead) {
+    // drained, stopped when the weapon part is destroyed. Hammers and rams
+    // don't spin — their tell is the lunge.
+    if (!this.spinnerDead && curr.build.weapon.archetype === 'spinner') {
       const energyFrac = curr.energy / curr.stats.reactorCap;
       this.spinner.rotation += (0.004 + 0.028 * energyFrac) * dtMs;
     }
@@ -189,16 +214,28 @@ export class BotView {
     if (this.smoke.emitting) this.smoke.setPosition(x, y - this.frame.legH - this.frame.torsoH);
   }
 
-  /** Punch the saw arm forward on an attack — windup-free but readable. */
+  /** Weapon-arm attack animation: spinners jab, hammers swing overhead,
+   *  rams shove the whole arm with the body weight behind it. */
   lunge(scene: Phaser.Scene): void {
     if (this.fallen) return;
-    scene.tweens.add({
-      targets: this.weaponArm,
-      x: this.weaponArm.x + 14,
-      duration: 70,
-      yoyo: true,
-      ease: 'Quad.easeOut',
-    });
+    const arch = this.archetype;
+    if (arch === 'hammer') {
+      scene.tweens.add({
+        targets: this.weaponArm,
+        rotation: { from: -1.1, to: 0.25 },
+        duration: 130,
+        yoyo: true,
+        ease: 'Quad.easeIn',
+      });
+    } else {
+      scene.tweens.add({
+        targets: this.weaponArm,
+        x: this.weaponArm.x + (arch === 'ram' ? 20 : 14),
+        duration: arch === 'ram' ? 110 : 70,
+        yoyo: true,
+        ease: 'Quad.easeOut',
+      });
+    }
   }
 
   /** Pop the next armour plate off: reparent to world space and fling it. */

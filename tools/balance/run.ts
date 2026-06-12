@@ -6,10 +6,31 @@
 // Run: npm run balance [-- --n 1000]
 
 import { createFight, MAX_TICKS, TICKS_PER_SECOND, type FightEvent } from '../../src/sim/fight';
-import { matchupFromSeed } from '../../src/data/builds';
+import { randomBuild } from '../../src/data/builds';
+import { mulberry32 } from '../../src/sim/rng';
+import type { BotBuild } from '../../src/sim/types';
 
 const nArg = process.argv.indexOf('--n');
 const N = nArg >= 0 ? parseInt(process.argv[nArg + 1], 10) : 500;
+
+// Budget-matched pairings: both builds within ₵150 total cost — the fair-fight
+// condition the balance exit criteria are written against (and roughly what
+// tier matchmaking produces in the real game).
+const BUDGET_BAND = 150;
+
+function buildCost(b: BotBuild): number {
+  return b.chassis.cost + b.weapon.cost + b.armour.cost + b.core.cost + b.chip.cost;
+}
+
+function budgetMatchedPair(seed: number): [BotBuild, BotBuild] {
+  const rng = mulberry32(seed ^ 0x9e3779b9);
+  const a = randomBuild(rng, 'bot_a', 0);
+  let b = randomBuild(rng, 'bot_b', 1);
+  for (let tries = 0; tries < 80 && Math.abs(buildCost(a) - buildCost(b)) > BUDGET_BAND; tries++) {
+    b = randomBuild(rng, 'bot_b', 1);
+  }
+  return [a, b];
+}
 
 interface FightReport {
   seconds: number;
@@ -18,11 +39,13 @@ interface FightReport {
   result: string;
   winnerChip: string;
   loserChip: string;
+  winnerArch: string;
+  loserArch: string;
   partDisables: number;
 }
 
 function runOne(seed: number): FightReport {
-  const [a, b] = matchupFromSeed(seed);
+  const [a, b] = budgetMatchedPair(seed);
   const fight = createFight(a, b, seed);
   let lastDamageTick = 0;
   let longestDrought = 0;
@@ -49,6 +72,8 @@ function runOne(seed: number): FightReport {
     result: fight.state.result,
     winnerChip: builds[winner]?.chip.name ?? '?',
     loserChip: builds[1 - winner]?.chip.name ?? '?',
+    winnerArch: builds[winner]?.weapon.archetype ?? '?',
+    loserArch: builds[1 - winner]?.weapon.archetype ?? '?',
     partDisables,
   };
 }
@@ -87,5 +112,20 @@ for (const r of reports) {
 console.log(`\nwin rate by chip:`);
 for (const [chip, { w, n }] of [...chipWins.entries()].sort()) {
   console.log(`  ${chip.padEnd(14)} ${((w / n) * 100).toFixed(1)}%  (${n} fights)`);
+}
+
+// Weapon archetypes are the M3 headline — none may dominate.
+const archWins = new Map<string, { w: number; n: number }>();
+for (const r of reports) {
+  for (const [arch, won] of [[r.winnerArch, 1], [r.loserArch, 0]] as const) {
+    const e = archWins.get(arch) ?? { w: 0, n: 0 };
+    e.w += won;
+    e.n += 1;
+    archWins.set(arch, e);
+  }
+}
+console.log(`\nwin rate by weapon archetype:`);
+for (const [arch, { w, n }] of [...archWins.entries()].sort()) {
+  console.log(`  ${arch.padEnd(14)} ${((w / n) * 100).toFixed(1)}%  (${n} fights)`);
 }
 console.log('');

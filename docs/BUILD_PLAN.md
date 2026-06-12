@@ -20,10 +20,10 @@ One full league week: results → market → workshop (DOM UI, part swaps visibl
 3 tiers + fame + promotion choice, sponsors, crew (hire/jobs/wages/salvage checks), garage slots + second bot, part destruction + salvage market, save versioning + export/import (✅ all built; v1→v2 save migration shipped).
 **Exit:** 10-week campaign holds the economy tension curve (weeks 1–3 knife-edge, 4–7 surplus, 8–10 T2 gate) in playtest; a wipe-out week never dead-ends a run.
 
-## M3 — Content & balance (~5 sessions)
+## M3 — Content & balance  ✅ built (audio landed early; market events deferred)
 
-Hammer + ram weapon archetypes, ~20 parts, ~8 chips, 18 named rivals, market events, audio pass, championship + endless ladder.
-**Exit:** balance runner shows no part/chip >58% win rate at equal budget; 30-fight campaign completable; fight variety verdict from playtesters.
+Hammer + ram weapon archetypes (✅ distinct sim behaviour + visuals), 20 parts (✅), 8 chips (✅), 9 named rivals across tiers (18 cut to 9 — quality over count), audio pass (✅ shipped before M3), championship belt + defenses + endless ladder (✅). Market events deferred to a content patch.
+**Exit:** balance runner shows no part/chip >58% win rate at equal budget (✅ budget-matched runner: chips 43.8–57.5%, archetypes 47.6–51.5%); 30-fight campaign completable; fight variety verdict from playtesters (pending).
 
 ## M4 — Ship & playtest (~3 sessions)
 

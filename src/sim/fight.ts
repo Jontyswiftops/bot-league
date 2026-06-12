@@ -392,6 +392,7 @@ function applyDamage(
   raw: number,
   isRam: boolean,
   rng: Rng,
+  partScale = 1.3,
 ): void {
   const targetIdx = (1 - attackerIdx) as 0 | 1;
   const attacker = state.bots[attackerIdx];
@@ -404,14 +405,14 @@ function applyDamage(
   target.hull -= net;
   state.lastDamageTick = state.tick;
 
-  // The struck part takes condition damage alongside the hull. Tuned so a
-  // part dies in roughly a third of fights — a story beat, not the norm.
+  // The struck part takes condition damage alongside the hull. partScale is
+  // the archetype's signature: hammers crush parts, rams mostly dent hull.
   const before = target.condition[part];
   if (part !== 'chassis') {
-    target.condition[part] = Math.max(0, before - net * 1.3);
+    target.condition[part] = Math.max(0, before - net * partScale);
   } else {
     // Chassis condition floors at 1 — the frame only "dies" when hull hits 0.
-    target.condition.chassis = Math.max(1, before - net * 0.7);
+    target.condition.chassis = Math.max(1, before - net * partScale * 0.55);
   }
 
   const hitX = (attacker.x + target.x) / 2;
@@ -457,16 +458,29 @@ function tryAttack(state: FightState, events: FightEvent[], idx: 0 | 1, rng: Rng
     // Swinging wears your own weapon a touch — long fights grind both bots down.
     me.condition.weapon = Math.max(0, me.condition.weapon - 0.25);
 
+    const archetype = me.build.weapon.archetype;
     const desperate = me.fsm === 'DESPERATE';
     const speedDodge = (foe.stats.speed / 200) * 0.18;
+    // Hammers telegraph: a big slow swing is easier to slip than a saw.
+    const windupPenalty = archetype === 'hammer' ? 0.12 : 0;
     const hitChance = Math.max(
       0.25,
-      Math.min(0.95, 0.6 + (me.stats.wits - 0.5) - speedDodge - (desperate ? 0.08 : 0)),
+      Math.min(0.95, 0.6 + (me.stats.wits - 0.5) - speedDodge - windupPenalty - (desperate ? 0.08 : 0)),
     );
     if (rng() < hitChance) {
       const odBoost = me.odTicks > 0 ? 1.3 : 1;
-      const punch = me.stats.punch * (desperate ? 1.3 : 1) * odBoost;
-      applyDamage(state, events, idx, punch, false, rng);
+      let punch = me.stats.punch * (desperate ? 1.3 : 1) * odBoost;
+      // Archetype signatures: hammers crush part condition; rams add the
+      // bot's mass and momentum on top of the blade and land as a shove.
+      let partScale = 1.3;
+      if (archetype === 'hammer') partScale = 2.0;
+      if (archetype === 'ram') {
+        const mass = me.build.chassis.weight + me.build.armour.weight;
+        punch += mass * 0.16 * (me.stats.speed / MAXISH_SPEED) * odBoost;
+        partScale = 0.9;
+        me.hull -= 1; // throwing your chassis around isn't free
+      }
+      applyDamage(state, events, idx, punch, archetype === 'ram', rng, partScale);
     } else {
       events.push({ type: 'miss', bot: idx, x: (me.x + foe.x) / 2, y: (me.y + foe.y) / 2 });
     }
@@ -476,7 +490,7 @@ function tryAttack(state: FightState, events: FightEvent[], idx: 0 | 1, rng: Rng
     me.weaponCooldown = 24; // slow — 1.2s between rams
     const mass = me.build.chassis.weight + me.build.armour.weight;
     const ramDamage = mass * 0.06 * (me.stats.speed / MAXISH_SPEED);
-    applyDamage(state, events, idx, Math.max(3, ramDamage), true, rng);
+    applyDamage(state, events, idx, Math.max(3, ramDamage), true, rng, 0.9);
     me.hull -= 1; // ramming hurts you a little too
   }
 }

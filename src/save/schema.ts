@@ -5,7 +5,7 @@
 
 import type { Slot } from '../sim/types';
 
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 
 /** A bot as persisted: part references + condition, not embedded part defs. */
 export interface SavedBot {
@@ -55,6 +55,8 @@ export interface MatchOffer {
   entryFee: number;
   prize: number;
   famePrize: number;
+  /** Championship match: the belt (or its defense) is on the line. */
+  title?: boolean;
 }
 
 export interface GameState {
@@ -82,6 +84,8 @@ export interface GameState {
   rivalRecords: Record<string, { wins: number; losses: number }>;
   /** Lifetime W-L. */
   record: { wins: number; losses: number };
+  /** Holder of the Circuit belt — the campaign's win condition. */
+  champion: boolean;
 }
 
 /**
@@ -97,6 +101,8 @@ export const MIGRATIONS: Array<(raw: Record<string, unknown>) => Record<string, 
     crewMarket: [],
     crew: ((raw.crew as Array<Record<string, unknown>>) ?? []).map((c) => ({ job: 'tune', ...c })),
   }),
+  // v2 -> v3: championship belt.
+  (raw) => ({ ...raw, version: 3, champion: false }),
 ];
 
 export function migrate(raw: Record<string, unknown>): GameState {

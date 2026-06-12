@@ -366,6 +366,7 @@ function updateCommandBar(): void {
 function renderHud(): void {
   const r = state.record;
   $('hud-stats').innerHTML =
+    `${state.champion ? '<b style="color:var(--hot)">&#9733; CHAMPION</b> &nbsp;·&nbsp; ' : ''}` +
     `<b>${TIERS[state.tier].label.toUpperCase()}</b> &nbsp;·&nbsp; WEEK <b>${state.week}</b>` +
     ` &nbsp;·&nbsp; <b class="price">&#8373;${state.cash}</b>` +
     ` &nbsp;·&nbsp; FAME <b>${state.fame}</b>${state.fame >= 3 ? ' (sponsored)' : ''}` +
@@ -478,7 +479,7 @@ function statLine(partId: string): string {
   const p = partById(partId);
   switch (p.kind) {
     case 'chassis': return `hull ${p.hull} · agi ${p.agility}`;
-    case 'weapon': return `dmg ${p.damage} · cost ${p.energyCost}e`;
+    case 'weapon': return `${p.archetype.toUpperCase()} · dmg ${p.damage} · cost ${p.energyCost}e`;
     case 'armour': return `plate ${p.plating} · +${p.hullBonus} hull`;
     case 'core': return `cap ${p.capacity} · regen ${p.regen} · x${p.output}`;
     case 'chip': return `grade ${p.grade}`;
@@ -562,8 +563,8 @@ function renderLeague(): void {
       const recTxt = rec ? ` · you ${rec.losses}-${rec.wins} them` : '';
       const cmp = (mine: number, their: number) =>
         `<span class="${mine >= their ? 'adv' : 'dis'}">${Math.round(their)}</span>`;
-      return `<div class="card offer">
-        <div class="vs"><b style="color:${accentHex(o.accent)}">${o.botName}</b>
+      return `<div class="card offer"${o.title ? ' style="border-color:var(--hot);box-shadow:0 0 12px rgba(255,179,0,.15)"' : ''}>
+        <div class="vs">${o.title ? '<b style="color:var(--hot)">&#9733; TITLE FIGHT — </b>' : ''}<b style="color:${accentHex(o.accent)}">${o.botName}</b>
           <span class="muted">· ${o.builderName}${recTxt}</span></div>
         <div class="muted">&ldquo;${o.attitude}&rdquo;</div>
         <div class="intel">
@@ -608,10 +609,14 @@ function renderResults(): void {
     })
     .join('');
 
+  const headline = r.titleWon
+    ? `<div class="headline" style="color:var(--hot)">&#9733; CHAMPION OF THE CIRCUIT &#9733;</div>
+       <div class="muted" style="margin-bottom:8px">You built that thing. And you just watched it take the belt.</div>`
+    : `<div class="headline" style="color:${r.won ? 'var(--good)' : 'var(--bad)'}">
+        ${r.won ? 'VICTORY' : 'DEFEAT'} <span class="muted">by ${r.result === 'ko' ? 'KO' : 'judges decision'}</span>
+      </div>`;
   $('results-panel').innerHTML = `
-    <div class="headline" style="color:${r.won ? 'var(--good)' : 'var(--bad)'}">
-      ${r.won ? 'VICTORY' : 'DEFEAT'} <span class="muted">by ${r.result === 'ko' ? 'KO' : 'judges decision'}</span>
-    </div>
+    ${headline}
     <div class="ledger">
       <div><span>${r.won ? 'Prize money' : 'Show-up purse'}</span><b class="price">+&#8373;${r.prize}</b></div>
       ${r.sponsorBonus ? `<div><span>Sponsor win bonus</span><b class="price">+&#8373;${r.sponsorBonus}</b></div>` : ''}
