@@ -36,6 +36,11 @@ export function eventToBark(e: FightEvent, names: [string, string], tick: number
       return `${names[e.bot]} is running on fumes...`;
     case 'desperate':
       return `${names[e.bot]} goes BERSERK!`;
+    case 'command':
+      return pick([
+        `${names[e.bot]} gets the call: ${e.command}!`,
+        `Pit signal to ${names[e.bot]}: ${e.command}!`,
+      ]);
     case 'crowdHeat':
       return `The crowd wants a finish — damage is ramping up!`;
     case 'judges':

@@ -3,15 +3,19 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-    <title>Bot League — M0 Fight Viewer</title>
+    <title>Bot League</title>
     <style>
       :root {
         --bg: #0b0d10;
         --panel: #14171c;
+        --panel2: #181c22;
         --line: #2c333d;
         --text: #e8edf2;
         --dim: #9aa7b5;
         --hot: #ffb300;
+        --good: #57d75b;
+        --bad: #ff4d4d;
+        --energy: #35c5e8;
       }
       * { box-sizing: border-box; margin: 0; }
       body {
@@ -22,11 +26,11 @@
         display: flex;
         flex-direction: column;
         align-items: center;
-        padding: 12px;
+        padding: 10px;
         gap: 10px;
       }
-      header {
-        width: min(960px, 100%);
+      .wrap { width: min(1020px, 100%); }
+      header.wrap {
         display: flex;
         justify-content: space-between;
         align-items: baseline;
@@ -34,12 +38,64 @@
         flex-wrap: wrap;
       }
       h1 { font-size: 20px; letter-spacing: 3px; color: var(--hot); }
-      h1 span { color: var(--dim); font-size: 12px; letter-spacing: 1px; }
-      #matchup { font-size: 14px; }
-      #matchup b { font-weight: 700; }
-      #stage {
+      #hud-stats { font-size: 14px; color: var(--dim); }
+      #hud-stats b { color: var(--text); }
+      nav.wrap { display: flex; gap: 6px; }
+      nav button {
+        flex: 1;
+        background: var(--panel);
+        color: var(--dim);
+        border: 1px solid var(--line);
+        border-radius: 6px 6px 0 0;
+        padding: 10px 6px;
+        font: inherit;
+        font-size: 13px;
+        letter-spacing: 2px;
+        cursor: pointer;
+      }
+      nav button.active { color: var(--hot); border-bottom-color: var(--hot); }
+      main.wrap { flex: 1; }
+      .screen.hidden, .hidden { display: none !important; }
+
+      button.act {
+        background: var(--panel2);
+        color: var(--text);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 8px 14px;
+        font: inherit;
+        font-size: 13px;
+        cursor: pointer;
+        touch-action: manipulation;
+      }
+      button.act:hover:not(:disabled) { border-color: var(--hot); color: var(--hot); }
+      button.act:disabled { opacity: 0.4; cursor: default; }
+      button.act.primary { border-color: var(--hot); color: var(--hot); }
+      button.act.danger { border-color: var(--bad); color: var(--bad); }
+
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 12px;
+      }
+      .grid { display: grid; gap: 10px; }
+      .muted { color: var(--dim); font-size: 12px; }
+      .price { color: var(--hot); }
+      .scrapped { color: var(--bad); font-weight: 700; }
+
+      /* condition / stat bars */
+      .bar { background: #0a0c0f; border: 1px solid var(--line); border-radius: 3px; height: 10px; overflow: hidden; }
+      .bar > i { display: block; height: 100%; background: var(--good); }
+      .bar.warn > i { background: var(--hot); }
+      .bar.crit > i { background: var(--bad); }
+
+      /* garage layout */
+      #screen-garage { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+      @media (max-width: 760px) { #screen-garage { grid-template-columns: 1fr; } }
+      #garage-canvas-slot, #fight-canvas-slot {
         position: relative;
-        width: min(960px, 100%);
+        width: 100%;
         aspect-ratio: 800 / 520;
         border: 1px solid var(--line);
         border-radius: 8px;
@@ -47,74 +103,85 @@
         background: var(--panel);
       }
       #arena, #arena canvas { width: 100%; height: 100%; display: block; }
-      #overlay {
-        position: absolute;
-        inset: 0;
-        background: rgba(8, 10, 13, 0.78);
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 18px;
-        z-index: 5;
-      }
-      #overlay.hidden { display: none; }
-      #overlay-title { font-size: clamp(18px, 4vw, 34px); letter-spacing: 2px; text-align: center; padding: 0 16px; }
-      #bark {
-        width: min(960px, 100%);
-        min-height: 26px;
-        color: var(--dim);
-        font-size: 15px;
-        transition: color 0.15s, transform 0.15s;
-      }
-      #bark.flash { color: var(--hot); transform: scale(1.02); }
-      footer {
-        width: min(960px, 100%);
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 10px;
-        flex-wrap: wrap;
-      }
-      .btn-row { display: flex; gap: 10px; }
-      button {
-        background: var(--panel);
-        color: var(--text);
-        border: 1px solid var(--line);
-        border-radius: 6px;
-        padding: 10px 18px;
-        font: inherit;
-        font-size: 14px;
-        cursor: pointer;
-        touch-action: manipulation;
-      }
-      button:hover { border-color: var(--hot); color: var(--hot); }
-      #seed { color: var(--dim); font-size: 12px; }
+
+      .slot-row { display: grid; grid-template-columns: 86px 1fr 64px auto; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid #1d222a; }
+      .slot-row:last-child { border-bottom: none; }
+      .statgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 8px 0; }
+      .stat { background: var(--panel2); border-radius: 6px; padding: 6px 8px; }
+      .stat b { display: block; font-size: 15px; }
+      .stat span { font-size: 10px; color: var(--dim); letter-spacing: 1px; }
+
+      .item-row { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center; padding: 7px 0; border-bottom: 1px solid #1d222a; }
+      .item-row:last-child { border-bottom: none; }
+
+      /* fight card offers */
+      .offer { display: grid; gap: 8px; }
+      .offer .vs { font-size: 16px; }
+      .intel { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; font-size: 12px; }
+      .intel div { background: var(--panel2); border-radius: 4px; padding: 4px 6px; text-align: center; }
+      .intel .adv { color: var(--good); }
+      .intel .dis { color: var(--bad); }
+
+      /* fight screen */
+      #bark { min-height: 24px; color: var(--dim); font-size: 15px; padding: 4px 2px; transition: color .15s, transform .15s; }
+      #bark.flash { color: var(--hot); transform: scale(1.01); }
+      #command-bar { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+      #command-bar button { flex: 1; min-width: 92px; }
+      #cooldown { font-size: 12px; color: var(--dim); min-width: 88px; text-align: right; }
+
+      /* results */
+      #screen-results .headline { font-size: clamp(20px, 4vw, 30px); letter-spacing: 2px; margin-bottom: 8px; }
+      .ledger { display: grid; gap: 4px; margin: 10px 0; }
+      .ledger div { display: flex; justify-content: space-between; }
+      .dmg-row { display: grid; grid-template-columns: 86px 1fr 1fr; gap: 8px; align-items: center; padding: 4px 0; }
+      .rival-bark { font-style: italic; color: var(--dim); margin-top: 10px; }
     </style>
   </head>
   <body>
-    <header>
-      <h1>BOT LEAGUE <span>M0 — fight night preview</span></h1>
-      <div id="matchup"><b id="name-a"></b> <span style="color: var(--dim)">vs</span> <b id="name-b"></b></div>
+    <header class="wrap">
+      <h1>BOT LEAGUE</h1>
+      <div id="hud-stats"></div>
+      <button class="act danger" data-action="newgame">NEW GAME</button>
     </header>
-    <div id="stage">
-      <div id="arena"></div>
-      <div id="overlay" class="hidden">
-        <div id="overlay-title"></div>
-        <div class="btn-row">
-          <button id="btn-again">NEXT FIGHT</button>
-          <button id="btn-rewatch">REWATCH</button>
+
+    <nav class="wrap" id="tabs">
+      <button data-action="tab" data-tab="garage">GARAGE</button>
+      <button data-action="tab" data-tab="shop">SHOP</button>
+      <button data-action="tab" data-tab="league">FIGHT NIGHT</button>
+    </nav>
+
+    <main class="wrap">
+      <section id="screen-garage" class="screen">
+        <div id="garage-canvas-slot"><div id="arena"></div></div>
+        <div id="garage-panel" class="card"></div>
+      </section>
+
+      <section id="screen-shop" class="screen hidden">
+        <div id="shop-panel" class="card"></div>
+      </section>
+
+      <section id="screen-league" class="screen hidden">
+        <div id="league-panel" class="grid"></div>
+      </section>
+
+      <section id="screen-fight" class="screen hidden">
+        <div id="fight-canvas-slot"></div>
+        <div id="bark"></div>
+        <div id="command-bar">
+          <button class="act" data-action="cmd" data-cmd="ATTACK">ATTACK</button>
+          <button class="act" data-action="cmd" data-cmd="GUARD">GUARD</button>
+          <button class="act" data-action="cmd" data-cmd="FOCUS" data-part="weapon">FOCUS SAW</button>
+          <button class="act" data-action="cmd" data-cmd="FOCUS" data-part="armour">FOCUS ARMOUR</button>
+          <button class="act" data-action="cmd" data-cmd="OVERDRIVE">OVERDRIVE</button>
+          <span id="cooldown"></span>
         </div>
-      </div>
-    </div>
-    <div id="bark"></div>
-    <footer>
-      <div class="btn-row">
-        <button id="btn-new">NEW FIGHT</button>
-        <button id="btn-replay">REPLAY SEED</button>
-      </div>
-      <div id="seed"></div>
-    </footer>
+      </section>
+
+      <section id="screen-results" class="screen hidden">
+        <div id="results-panel" class="card"></div>
+      </section>
+    </main>
+
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

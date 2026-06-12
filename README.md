@@ -2,7 +2,7 @@
 
 Underground robot combat management sim for the browser. Build bots from salvage, watch them fight autonomously, pay for the wreckage. Phaser 3 + TypeScript + Vite; pure deterministic simulation core with Phaser as renderer only.
 
-**Status: M0** — the fight viewer. Answers one question: *is this fun to watch?*
+**Status: M1** — the vertical slice. A full league week loop: garage (repair/equip) → salvage market → fight card with named rivals → fight night with live coaching commands → damage settlement → next week. Autosaved to localStorage. Play it: https://jontyswiftops.github.io/bot-league/
 
 ## Quickstart
 

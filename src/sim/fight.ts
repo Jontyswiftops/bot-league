@@ -25,8 +25,21 @@ export type FsmState =
   | 'RETREAT'
   | 'DESPERATE';
 
+export type CommandType = 'ATTACK' | 'GUARD' | 'FOCUS' | 'OVERDRIVE';
+
+export interface BotCommand {
+  type: CommandType;
+  part: Slot | null;
+  /** Ticks until the chip complies — low discipline chips dawdle. */
+  delay: number;
+  /** Ticks the command stays in force once active. */
+  remaining: number;
+  activated: boolean;
+}
+
 export type FightEvent =
   | { type: 'hit'; bot: 0 | 1; target: 0 | 1; part: Slot; damage: number; x: number; y: number }
+  | { type: 'command'; bot: 0 | 1; command: CommandType }
   | { type: 'miss'; bot: 0 | 1; x: number; y: number }
   | { type: 'ram'; bot: 0 | 1; target: 0 | 1; damage: number; x: number; y: number }
   | { type: 'partDisabled'; bot: 0 | 1; part: Slot }
@@ -60,6 +73,13 @@ export interface BotFightState {
   /** Cumulative ticks spent fleeing — resolve to run is a finite resource. */
   retreatTicksTotal: number;
   lowPowerAnnounced: boolean;
+  /** Player coaching command in flight (delay) or in force (remaining). */
+  command: BotCommand | null;
+  /** Permanent hit-location bias set by a FOCUS command. */
+  focusPart: Slot | null;
+  /** Ticks of OVERDRIVE buff left (+speed/+punch). */
+  odTicks: number;
+  overdriveUsed: boolean;
 }
 
 export interface FightState {
@@ -103,7 +123,34 @@ function makeBotState(build: BotBuild, x: number, y: number, heading: number): B
     panels: 3,
     retreatTicksTotal: 0,
     lowPowerAnnounced: false,
+    command: null,
+    focusPart: null,
+    odTicks: 0,
+    overdriveUsed: false,
   };
+}
+
+/**
+ * Issue a coaching command to a bot. External input from the renderer — the
+ * chip's discipline decides how fast (or whether it feels like) complying.
+ * Returns false if the command is spent (OVERDRIVE is once per fight).
+ */
+export function issueCommand(
+  state: FightState,
+  idx: 0 | 1,
+  type: CommandType,
+  part: Slot | null = null,
+): boolean {
+  const me = state.bots[idx];
+  if (state.over) return false;
+  if (type === 'OVERDRIVE') {
+    if (me.overdriveUsed) return false;
+    me.overdriveUsed = true;
+  }
+  const delay = Math.round((1 - me.build.chip.weights.discipline) * 30); // 0–1.5s
+  const remaining = type === 'ATTACK' || type === 'GUARD' ? 80 : 1; // 4s holds
+  me.command = { type, part, delay, remaining, activated: false };
+  return true;
 }
 
 export function createFight(botA: BotBuild, botB: BotBuild, seed: number): Fight {
@@ -162,9 +209,18 @@ function decideState(me: BotFightState, foe: BotFightState, rng: Rng, tick: numb
   const myReach = reach(me);
   const energyFrac = me.energy / me.stats.reactorCap;
 
-  // Berserk overrides everything once it triggers.
+  // Berserk overrides everything once it triggers — even the coach.
   if (hp < 0.25 && w.ferocity > 0.5) return 'DESPERATE';
   if (me.fsm === 'DESPERATE') return 'DESPERATE';
+
+  // An active coaching command overrides normal scoring while it holds.
+  const cmd = me.command;
+  if (cmd && cmd.delay <= 0 && cmd.remaining > 0) {
+    if (cmd.type === 'GUARD') return 'RECOVER';
+    if (cmd.type === 'ATTACK') {
+      return d <= myReach * 1.15 && weaponReady(me) ? 'STRIKE' : 'APPROACH';
+    }
+  }
 
   // Hysteresis: commit to a state for at least 0.4s.
   if (me.ticksInState < 8 && me.fsm !== 'SEEK') return me.fsm;
@@ -259,6 +315,7 @@ function moveBot(me: BotFightState, foe: BotFightState, rng: Rng): void {
   const turnRate = (3.2 + me.stats.speed / 90) * TICK_DT;
   me.heading = turnTowards(me.heading, desiredHeading, turnRate + range(rng, 0, 0.01));
 
+  if (me.odTicks > 0) speedFrac *= 1.2; // OVERDRIVE: legs get hot too
   const v = me.stats.speed * speedFrac * TICK_DT;
   me.vx = Math.cos(me.heading) * me.stats.speed * speedFrac;
   me.vy = Math.sin(me.heading) * me.stats.speed * speedFrac;
@@ -315,6 +372,8 @@ function pickHitLocation(rng: Rng, attacker: BotFightState, target: BotFightStat
     // Opportunists aim where the enemy is already hurting.
     const damageFrac = 1 - target.condition[slot] / 100;
     w *= 1 + opp * damageFrac * 2.5;
+    // A FOCUS command from the coach biases aim hard toward one part.
+    if (attacker.focusPart === slot) w *= 6;
     return w;
   });
   return weightedPick(rng, HIT_LOCATIONS, weights);
@@ -405,7 +464,8 @@ function tryAttack(state: FightState, events: FightEvent[], idx: 0 | 1, rng: Rng
       Math.min(0.95, 0.6 + (me.stats.wits - 0.5) - speedDodge - (desperate ? 0.08 : 0)),
     );
     if (rng() < hitChance) {
-      const punch = me.stats.punch * (desperate ? 1.3 : 1);
+      const odBoost = me.odTicks > 0 ? 1.3 : 1;
+      const punch = me.stats.punch * (desperate ? 1.3 : 1) * odBoost;
       applyDamage(state, events, idx, punch, false, rng);
     } else {
       events.push({ type: 'miss', bot: idx, x: (me.x + foe.x) / 2, y: (me.y + foe.y) / 2 });
@@ -443,6 +503,30 @@ function stepFight(state: FightState, rng: Rng): FightEvent[] {
     const regenScale = me.fsm === 'RECOVER' || me.fsm === 'RETREAT' ? 2 : 1;
     me.energy = Math.min(me.stats.reactorCap, me.energy + me.stats.reactorRegen * regenScale * TICK_DT);
     if (me.weaponCooldown > 0) me.weaponCooldown--;
+    if (me.odTicks > 0) me.odTicks--;
+
+    // Coaching command lifecycle: dawdle (delay), activate once, hold, expire.
+    const cmd = me.command;
+    if (cmd) {
+      if (cmd.delay > 0) {
+        cmd.delay--;
+      } else {
+        if (!cmd.activated) {
+          cmd.activated = true;
+          events.push({ type: 'command', bot: idx, command: cmd.type });
+          if (cmd.type === 'FOCUS') me.focusPart = cmd.part;
+          if (cmd.type === 'OVERDRIVE') {
+            // Energy dump: full reactor + 5s of hot output, paid in core wear.
+            me.odTicks = 100;
+            me.energy = me.stats.reactorCap;
+            me.condition.core = Math.max(1, me.condition.core - 8);
+            me.stats = computeStats({ ...me.build, condition: me.condition });
+          }
+        }
+        cmd.remaining--;
+        if (cmd.remaining <= 0) me.command = null;
+      }
+    }
 
     const next = decideState(me, foe, rng, state.tick);
     if (next !== me.fsm) {

@@ -1,7 +1,7 @@
-// Save schema — versioned from day one so M2's real save system (and v2's
-// Firebase ghost-battle sync) never needs a breaking rewrite. Everything in a
-// save is plain JSON-serializable data; builds reference parts by id so
-// content patches don't corrupt old saves.
+// Save schema — versioned from day one so future changes (and v2's Firebase
+// ghost-battle sync) never need a breaking rewrite. Everything in a save is
+// plain JSON-serializable data; builds reference parts by id so content
+// patches don't corrupt old saves.
 
 import type { Slot } from '../sim/types';
 
@@ -25,8 +25,36 @@ export interface SavedCrewMember {
   weeklyWage: number;
 }
 
+export interface InventoryItem {
+  partId: string;
+  condition: number;
+}
+
+export interface MarketItem {
+  partId: string;
+  condition: number;
+  price: number;
+}
+
+export interface MatchOffer {
+  key: string;
+  /** Named rival id, or null for generated filler. */
+  rivalId: string | null;
+  builderName: string;
+  botName: string;
+  attitude: string;
+  accent: number;
+  parts: Record<Slot, string>;
+  condition: Record<Slot, number>;
+  entryFee: number;
+  prize: number;
+  famePrize: number;
+}
+
 export interface GameState {
   version: typeof SAVE_VERSION;
+  /** Master RNG seed for this campaign — market/card generation derive from it. */
+  seed: number;
   /** League week number — the master clock of the management sim. */
   week: number;
   cash: number;
@@ -35,10 +63,15 @@ export interface GameState {
   bots: SavedBot[];
   garageSlots: number;
   crew: SavedCrewMember[];
-  /** Part ids in storage (unequipped inventory). */
-  inventory: string[];
+  inventory: InventoryItem[];
+  /** This week's salvage market (items are removed when bought). */
+  market: MarketItem[];
+  /** This week's fight card. */
+  card: MatchOffer[];
   /** Persistent named-rival records: wins/losses against the player. */
   rivalRecords: Record<string, { wins: number; losses: number }>;
+  /** Lifetime W-L. */
+  record: { wins: number; losses: number };
 }
 
 /**

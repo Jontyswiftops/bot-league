@@ -2,7 +2,7 @@
 
 Rule: never start a milestone before the previous one's exit criteria are met.
 
-## M0 — "Is this fun to watch?"  ✅ built, awaiting human verdict
+## M0 — "Is this fun to watch?"  ✅ PASSED (human gate cleared 2026-06-12)
 
 Two FSM bots, one weapon archetype (spinner), sparks/shake/hit-stop/panels/KO slow-mo, commentary barks, New Fight / Replay Seed.
 
@@ -10,10 +10,10 @@ Two FSM bots, one weapon archetype (spinner), sparks/shake/hit-stop/panels/KO sl
 
 **Exit criteria — human (defined BEFORE building, still to run):** 3 people watch 5 unedited fights each. Pass if they (a) can narrate each fight's story afterward ("its spinner died and it won by ramming"), (b) react visibly at least once per fight, (c) ask to watch another unprompted. **If this fails, we fix watchability before writing a single line of management code.**
 
-## M1 — Vertical slice (~5 sessions)
+## M1 — Vertical slice  ✅ built, awaiting playtest exit check
 
 One full league week: results → market → workshop (DOM UI, part swaps visible on sprite) → match card → fight night → repair triage. T1 opponents (3 named rivals + filler), cash + entry fees + prizes + repairs, the 4 live-intervention commands, save/load (continue only).
-**Exit:** a stranger can play 3 league weeks unassisted and explain their repair-or-replace decision; balance runner gates tuning; deploy live on Pages.
+**Exit:** a stranger can play 3 league weeks unassisted and explain their repair-or-replace decision; balance runner gates tuning (✅ no regression); deploy live on Pages (✅).
 
 ## M2 — Full management (~5 sessions)
 

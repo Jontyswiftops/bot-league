@@ -16,10 +16,13 @@ import Phaser from 'phaser';
 import {
   ARENA,
   createFight,
+  issueCommand,
   TICK_DT,
+  type CommandType,
   type Fight,
   type FightEvent,
 } from '../sim/fight';
+import type { BotBuild, Slot } from '../sim/types';
 import { matchupFromSeed } from '../data/builds';
 import { BotView } from '../render/botView';
 import { eventToBark } from '../render/commentary';
@@ -52,9 +55,10 @@ export class FightScene extends Phaser.Scene {
     super('fight');
   }
 
-  init(data: { seed?: number }) {
+  init(data: { seed?: number; botA?: BotBuild; botB?: BotBuild }) {
     const seed = data.seed ?? 1;
-    const [a, b] = matchupFromSeed(seed);
+    // League fights pass real builds; with none given it's an exhibition.
+    const [a, b] = data.botA && data.botB ? [data.botA, data.botB] : matchupFromSeed(seed);
     this.fight = createFight(a, b, seed);
     this.views = [];
     this.prev = [];
@@ -124,6 +128,17 @@ export class FightScene extends Phaser.Scene {
       .text(ARENA.w / 2, 8, '0:00', { fontFamily: 'monospace', fontSize: '15px', color: '#9aa7b5' })
       .setOrigin(0.5, 0)
       .setDepth(3001);
+
+    // Coaching commands arrive from the DOM command bar. The player always
+    // coaches bot 0. Listener is removed when the scene shuts down.
+    const onCommand = (e: Event) => {
+      const { type, part } = (e as CustomEvent).detail as { type: CommandType; part?: Slot };
+      issueCommand(this.fight.state, 0, type, part ?? null);
+    };
+    document.addEventListener('fight:command', onCommand);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      document.removeEventListener('fight:command', onCommand);
+    });
   }
 
   private drawArena() {
@@ -188,11 +203,19 @@ export class FightScene extends Phaser.Scene {
 
     if (this.fight.state.over && !this.ended && this.fight.state.winner !== -1) {
       this.ended = true;
-      const winner = this.fight.state.bots[this.fight.state.winner].build;
+      const winnerIdx = this.fight.state.winner;
+      const winner = this.fight.state.bots[winnerIdx].build;
       this.time.delayedCall(900, () => {
         document.dispatchEvent(
           new CustomEvent('fight:over', {
-            detail: { winner: winner.name, result: this.fight.state.result, accent: winner.accent },
+            detail: {
+              winner: winner.name,
+              winnerIdx,
+              result: this.fight.state.result,
+              accent: winner.accent,
+              // Settlement data: the dents both bots carry out of the arena.
+              conditions: this.fight.state.bots.map((b) => ({ ...b.condition })),
+            },
           }),
         );
       });
