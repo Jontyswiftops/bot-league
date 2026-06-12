@@ -93,7 +93,7 @@ export class FightScene extends Phaser.Scene {
       lifespan: { min: 120, max: 380 },
       emitting: false,
     });
-    this.sparks.setDepth(30);
+    this.sparks.setDepth(2500);
 
     // Bolts: chunkier, slower debris for part deaths and KOs.
     this.bolts = this.add.particles(0, 0, 'px', {
@@ -105,9 +105,9 @@ export class FightScene extends Phaser.Scene {
       gravityY: 60,
       emitting: false,
     });
-    this.bolts.setDepth(30);
+    this.bolts.setDepth(2500);
 
-    this.hud = this.add.graphics().setDepth(40);
+    this.hud = this.add.graphics().setDepth(3000);
     for (const [i, b] of bots.entries()) {
       this.nameTexts.push(
         this.add
@@ -117,13 +117,13 @@ export class FightScene extends Phaser.Scene {
             color: '#e8edf2',
           })
           .setOrigin(i === 0 ? 0 : 1, 0)
-          .setDepth(41),
+          .setDepth(3001),
       );
     }
     this.clockText = this.add
       .text(ARENA.w / 2, 8, '0:00', { fontFamily: 'monospace', fontSize: '15px', color: '#9aa7b5' })
       .setOrigin(0.5, 0)
-      .setDepth(41);
+      .setDepth(3001);
   }
 
   private drawArena() {
@@ -145,6 +145,19 @@ export class FightScene extends Phaser.Scene {
     g.strokeRect(ARENA.wall / 2, ARENA.wall / 2, ARENA.w - ARENA.wall, ARENA.h - ARENA.wall);
     g.lineStyle(2, 0xffb300, 0.5);
     g.strokeRect(ARENA.wall, ARENA.wall, ARENA.w - ARENA.wall * 2, ARENA.h - ARENA.wall * 2);
+
+    // Back wall + crowd: a dark band of silhouette heads behind the top rope.
+    // The fighters are humanoid now — the venue should read like a fight pit.
+    g.fillStyle(0x07080a, 0.92);
+    g.fillRect(0, 0, ARENA.w, ARENA.wall + 26);
+    for (let i = 0; i < 60; i++) {
+      const cx = 10 + rand() * (ARENA.w - 20);
+      const cy = 6 + rand() * (ARENA.wall + 12);
+      g.fillStyle(0x1a1e24);
+      g.fillCircle(cx, cy, 5 + rand() * 3);
+    }
+    g.lineStyle(3, 0xffb300, 0.6);
+    g.lineBetween(0, ARENA.wall + 26, ARENA.w, ARENA.wall + 26);
   }
 
   update(_time: number, delta: number) {
@@ -165,8 +178,11 @@ export class FightScene extends Phaser.Scene {
     }
 
     const alpha = Math.min(1, this.accumulator / TICK_MS);
+    const bots = this.fight.state.bots;
     for (const [i, view] of this.views.entries()) {
-      view.update(this.prev[i], this.fight.state.bots[i], alpha, delta);
+      // Fighters always square up to their opponent, whichever way they drift.
+      const facing: 1 | -1 = bots[1 - i].x >= bots[i].x ? 1 : -1;
+      view.update(this.prev[i], bots[i], alpha, delta, facing);
     }
     this.drawHud();
 
@@ -191,7 +207,11 @@ export class FightScene extends Phaser.Scene {
     }
 
     switch (e.type) {
+      case 'miss':
+        this.views[e.bot].lunge(this);
+        break;
       case 'hit': {
+        this.views[e.bot].lunge(this);
         this.sparks.explode(Math.min(26, 6 + e.damage * 1.2), e.x, e.y);
         // Camera shake intensity and hit-stop scale with how hard the hit
         // landed — small hits tick, big hits THUD.
@@ -201,6 +221,7 @@ export class FightScene extends Phaser.Scene {
         break;
       }
       case 'ram': {
+        this.views[e.bot].lunge(this);
         this.sparks.explode(10, e.x, e.y);
         this.bolts.explode(4, e.x, e.y);
         this.cameras.main.shake(110, 0.01);

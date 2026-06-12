@@ -2,12 +2,13 @@
 
 ## Visual style
 
-Top-down 2D, flat-shaded geometric bots on an oil-dark arena. Programmer art that looks *intentional* through discipline, not detail:
+**Humanoid fighting robots, beat-'em-up camera.** Side-view figures on a floor plane — the sim's y axis renders as depth, so fighters circle each other and the nearer one draws in front (depth = floor y). Flat-shaded programmer art that looks *intentional* through discipline, not detail:
 
 - **Palette:** backgrounds in 4 dark steels (`#0b0d10`, `#14171c`, `#2c333d`, `#3a3f47`); ONE hot accent per bot (amber, cyan, magenta, lime, violet, orange). League gold `#ffb300` for UI highlights. Nothing else.
-- **Bots are their parts:** chassis silhouette varies by part (brute = wide slab, wasp = wedge), spinner disc size scales with weapon damage, armour plates are separate sprites that pop off as condition drops, core glow dims with energy. Swap a part in data → see it in the arena.
-- **Damage is visible state:** plates litter the floor, dead spinners stop and grey out, smoke above 70% hull damage. A glance tells you who's winning and why.
-- **Upgrade path:** all shapes come from `Graphics.generateTexture` in `botView.ts`. Real sprites later = replace those calls; positions, popping, tinting all survive.
+- **Bots are their parts**, mapped to a body: chassis = frame (brute = broad slab, wasp = slim), weapon = saw arm (disc scales with damage), armour = shoulder + chest plates, core = chest glow, chip = head visor. Swap a part in data → see it on the figure.
+- **Fighters behave like fighters:** they square up to each other (facing flips toward the foe), legs scissor in a walk cycle, the saw arm lunges on attacks, KO'd bots topple over and smoke. The venue reads like a fight pit: crowd-silhouette band behind the top rope.
+- **Damage is visible state:** plates litter the floor, dead saws stop and grey out, smoke above 70% hull damage. A glance tells you who's winning and why.
+- **Upgrade path:** all shapes come from `Graphics.generateTexture` in `botView.ts`, assembled on a simple rig (legs/torso/head/arms). Real sprites later = replace textures; the rig, animations, popping, and tinting all survive.
 
 ## Screen map (M1+)
 
