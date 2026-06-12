@@ -26,6 +26,7 @@ import type { BotBuild, Slot } from '../sim/types';
 import { matchupFromSeed } from '../data/builds';
 import { BotView } from '../render/botView';
 import { eventToBark } from '../render/commentary';
+import { sfx } from '../render/audio';
 
 const TICK_MS = TICK_DT * 1000;
 
@@ -232,9 +233,23 @@ export class FightScene extends Phaser.Scene {
     switch (e.type) {
       case 'miss':
         this.views[e.bot].lunge(this);
+        sfx.miss();
+        break;
+      case 'lowPower':
+        sfx.lowPower();
+        break;
+      case 'desperate':
+        sfx.desperate();
+        break;
+      case 'command':
+        sfx.command();
+        break;
+      case 'crowdHeat':
+        sfx.crowdHeat();
         break;
       case 'hit': {
         this.views[e.bot].lunge(this);
+        sfx.hit(e.damage);
         this.sparks.explode(Math.min(26, 6 + e.damage * 1.2), e.x, e.y);
         // Camera shake intensity and hit-stop scale with how hard the hit
         // landed — small hits tick, big hits THUD.
@@ -245,6 +260,7 @@ export class FightScene extends Phaser.Scene {
       }
       case 'ram': {
         this.views[e.bot].lunge(this);
+        sfx.ram();
         this.sparks.explode(10, e.x, e.y);
         this.bolts.explode(4, e.x, e.y);
         this.cameras.main.shake(110, 0.01);
@@ -253,10 +269,12 @@ export class FightScene extends Phaser.Scene {
       }
       case 'panelPop':
         this.views[e.bot].popPlate(this);
+        sfx.panelPop();
         this.bolts.explode(6, e.x, e.y);
         break;
       case 'partDisabled': {
         const v = this.views[e.bot];
+        sfx.partDead();
         if (e.part === 'weapon') v.killSpinner();
         const b = this.fight.state.bots[e.bot];
         this.bolts.explode(14, b.x, b.y);
@@ -267,6 +285,7 @@ export class FightScene extends Phaser.Scene {
       case 'ko': {
         // Finishing blow: brief slow-mo + the biggest shake we allow. The
         // tween eases sim speed back to realtime over the follow-through.
+        sfx.ko();
         this.bolts.explode(30, e.x, e.y);
         this.sparks.explode(30, e.x, e.y);
         this.cameras.main.shake(400, 0.02);

@@ -23,6 +23,7 @@ import {
 } from '../sim/league';
 import { partById, resolveBuild } from '../data';
 import { loadGame, saveGame, clearGame } from '../save/storage';
+import { isMuted, setMuted, sfx, unlockAudio } from '../render/audio';
 
 type ScreenId = 'garage' | 'shop' | 'league' | 'fight' | 'results';
 
@@ -53,6 +54,9 @@ export function initApp(g: Phaser.Game): void {
   saveGame(state);
 
   document.addEventListener('click', onClick);
+  // Browsers gate audio behind a user gesture — first press unlocks it.
+  document.addEventListener('pointerdown', unlockAudio, { once: true });
+  updateMuteButton();
   document.addEventListener('fight:bark', (e) => {
     const bark = $('bark');
     bark.textContent = (e as CustomEvent).detail.text;
@@ -115,7 +119,10 @@ function onClick(e: MouseEvent): void {
 
   switch (a.action) {
     case 'tab':
-      if (screen !== 'fight') show(a.tab as ScreenId);
+      if (screen !== 'fight') {
+        sfx.click();
+        show(a.tab as ScreenId);
+      }
       break;
     case 'newgame':
       if (window.confirm('Scrap this campaign and start over?')) {
@@ -125,17 +132,31 @@ function onClick(e: MouseEvent): void {
         show('garage');
       }
       break;
+    case 'mute':
+      setMuted(!isMuted());
+      updateMuteButton();
+      break;
     case 'repair':
-      if (repairPart(state, a.slot as Slot)) persistAnd(renderGarage);
+      if (repairPart(state, a.slot as Slot)) {
+        sfx.spend();
+        persistAnd(renderGarage);
+      }
       break;
     case 'buy':
-      if (buyItem(state, Number(a.idx))) persistAnd(renderShop);
+      if (buyItem(state, Number(a.idx))) {
+        sfx.spend();
+        persistAnd(renderShop);
+      }
       break;
     case 'sell':
-      if (sellItem(state, Number(a.idx))) persistAnd(renderGarage);
+      if (sellItem(state, Number(a.idx))) {
+        sfx.spend();
+        persistAnd(renderGarage);
+      }
       break;
     case 'equip':
       if (equipPart(state, Number(a.idx))) {
+        sfx.click();
         persistAnd(renderGarage);
         switchScene('preview', { build: resolveBuild(state.bots[0]) });
       }
@@ -143,6 +164,7 @@ function onClick(e: MouseEvent): void {
     case 'fight': {
       setup = beginMatch(state, a.key!);
       if (setup) {
+        sfx.click();
         saveGame(state);
         show('fight');
       }
@@ -177,6 +199,12 @@ function onFightOver(detail: {
   report = settleMatch(state, setup.offer, detail.winnerIdx, detail.result, detail.conditions[0]);
   saveGame(state);
   show('results');
+  sfx.sting(report.won);
+}
+
+function updateMuteButton(): void {
+  const btn = $('btn-mute');
+  btn.textContent = isMuted() ? 'SOUND: OFF' : 'SOUND: ON';
 }
 
 function issueUiCommand(btn: HTMLElement): void {
