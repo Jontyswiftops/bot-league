@@ -84,6 +84,8 @@ export interface BotBuild {
   core: CoreDef;
   chip: ChipDef;
   condition: Condition;
+  /** Chip familiarity with this frame (0–50), earned by sparring. Boosts Wits. */
+  familiarity?: number;
 }
 
 /** The six derived stats — the only numbers the player ever sees on a card. */

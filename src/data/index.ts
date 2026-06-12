@@ -28,5 +28,6 @@ export function resolveBuild(saved: SavedBot): BotBuild {
     core: get('core') as BotBuild['core'],
     chip: get('chip') as BotBuild['chip'],
     condition: { ...saved.condition },
+    familiarity: saved.chipFamiliarity,
   };
 }

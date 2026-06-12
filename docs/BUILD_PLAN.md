@@ -15,9 +15,9 @@ Two FSM bots, one weapon archetype (spinner), sparks/shake/hit-stop/panels/KO sl
 One full league week: results → market → workshop (DOM UI, part swaps visible on sprite) → match card → fight night → repair triage. T1 opponents (3 named rivals + filler), cash + entry fees + prizes + repairs, the 4 live-intervention commands, save/load (continue only).
 **Exit:** a stranger can play 3 league weeks unassisted and explain their repair-or-replace decision; balance runner gates tuning (✅ no regression); deploy live on Pages (✅).
 
-## M2 — Full management (~5 sessions)
+## M2 — Full management  ✅ built, awaiting 10-week economy playtest
 
-3 tiers + fame + promotion choice, sponsors, crew (hire/jobs/wages/salvage checks), garage slots + second bot, part destruction + salvage market, save versioning + export/import.
+3 tiers + fame + promotion choice, sponsors, crew (hire/jobs/wages/salvage checks), garage slots + second bot, part destruction + salvage market, save versioning + export/import (✅ all built; v1→v2 save migration shipped).
 **Exit:** 10-week campaign holds the economy tension curve (weeks 1–3 knife-edge, 4–7 surplus, 8–10 T2 gate) in playtest; a wipe-out week never dead-ends a run.
 
 ## M3 — Content & balance (~5 sessions)

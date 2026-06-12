@@ -62,7 +62,7 @@ describe('economy actions', () => {
     const s = newGame(1);
     const bot = s.bots[0];
     bot.condition.weapon = 50;
-    const cost = repairCost(bot.parts.weapon, 50);
+    const cost = repairCost(s, 'weapon');
     expect(cost).toBeGreaterThan(0);
     const cash = s.cash;
     expect(repairPart(s, 'weapon')).toBe(true);

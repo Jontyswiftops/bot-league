@@ -4,28 +4,45 @@
 // (preview scene) and fight night (fight scene).
 
 import type Phaser from 'phaser';
-import type { GameState } from '../save/schema';
+import type { CrewJob, GameState } from '../save/schema';
 import type { Slot } from '../sim/types';
 import {
+  activeBot,
   advanceWeek,
+  assembleBot,
+  backfillCrewMarket,
   beginMatch,
+  buyGarageSlot,
   buyItem,
+  canAssembleBot,
+  canPromote,
   equipPart,
+  fireCrew,
+  GARAGE_SLOT_COST,
+  hireCrew,
+  MAX_CREW,
+  MAX_GARAGE_SLOTS,
   newGame,
+  promote,
   repairCost,
   repairPart,
   sellItem,
   sellValue,
+  setActiveBot,
+  setCrewJob,
   settleMatch,
   statsFor,
+  TIERS,
   type MatchSetup,
   type SettleReport,
+  type WeekReport,
 } from '../sim/league';
 import { partById, resolveBuild } from '../data';
 import { loadGame, saveGame, clearGame } from '../save/storage';
+import { migrate } from '../save/schema';
 import { isMuted, music, setMuted, sfx, unlockAudio } from '../render/audio';
 
-type ScreenId = 'garage' | 'shop' | 'league' | 'fight' | 'results';
+type ScreenId = 'garage' | 'shop' | 'crew' | 'league' | 'fight' | 'results';
 
 const COMMAND_COOLDOWN_MS = 20_000;
 const SLOTS: Slot[] = ['chassis', 'weapon', 'armour', 'core', 'chip'];
@@ -42,6 +59,7 @@ let state: GameState;
 let screen: ScreenId = 'garage';
 let setup: MatchSetup | null = null;
 let report: SettleReport | null = null;
+let weekReport: WeekReport | null = null;
 let cooldownUntil = 0;
 let overdriveSpent = false;
 let cooldownTimer: number | undefined;
@@ -51,9 +69,11 @@ const $ = (id: string) => document.getElementById(id)!;
 export function initApp(g: Phaser.Game): void {
   game = g;
   state = loadGame() ?? freshGame();
+  backfillCrewMarket(state);
   saveGame(state);
 
   document.addEventListener('click', onClick);
+  document.addEventListener('change', onChange);
   // Browsers gate audio behind a user gesture — first press unlocks it and
   // kicks off the workshop music if we're on a management screen.
   document.addEventListener(
@@ -84,7 +104,7 @@ function freshGame(): GameState {
 
 function show(next: ScreenId): void {
   screen = next;
-  for (const id of ['garage', 'shop', 'league', 'fight', 'results']) {
+  for (const id of ['garage', 'shop', 'crew', 'league', 'fight', 'results']) {
     $(`screen-${id}`).classList.toggle('hidden', id !== next);
   }
   document.querySelectorAll<HTMLButtonElement>('#tabs button').forEach((b) => {
@@ -93,7 +113,7 @@ function show(next: ScreenId): void {
 
   if (next === 'garage') {
     $('garage-canvas-slot').appendChild($('arena'));
-    switchScene('preview', { build: resolveBuild(state.bots[0]) });
+    switchScene('preview', { build: resolveBuild(activeBot(state)) });
   } else if (next === 'fight' && setup) {
     $('fight-canvas-slot').appendChild($('arena'));
     switchScene('fight', { seed: setup.seed, botA: setup.player, botB: setup.opponent });
@@ -108,6 +128,7 @@ function show(next: ScreenId): void {
   renderHud();
   if (next === 'garage') renderGarage();
   if (next === 'shop') renderShop();
+  if (next === 'crew') renderCrew();
   if (next === 'league') renderLeague();
   if (next === 'results') renderResults();
 }
@@ -137,6 +158,11 @@ function onClick(e: MouseEvent): void {
         show(a.tab as ScreenId);
       }
       break;
+    case 'mute':
+      setMuted(!isMuted());
+      if (!isMuted() && screen !== 'fight') music.start();
+      updateMuteButton();
+      break;
     case 'newgame':
       if (window.confirm('Scrap this campaign and start over?')) {
         clearGame();
@@ -145,10 +171,11 @@ function onClick(e: MouseEvent): void {
         show('garage');
       }
       break;
-    case 'mute':
-      setMuted(!isMuted());
-      if (!isMuted() && screen !== 'fight') music.start();
-      updateMuteButton();
+    case 'export':
+      exportSave();
+      break;
+    case 'import':
+      importSave();
       break;
     case 'repair':
       if (repairPart(state, a.slot as Slot)) {
@@ -172,7 +199,46 @@ function onClick(e: MouseEvent): void {
       if (equipPart(state, Number(a.idx))) {
         sfx.click();
         persistAnd(renderGarage);
-        switchScene('preview', { build: resolveBuild(state.bots[0]) });
+        switchScene('preview', { build: resolveBuild(activeBot(state)) });
+      }
+      break;
+    case 'botselect':
+      if (setActiveBot(state, Number(a.idx))) {
+        sfx.click();
+        persistAnd(renderGarage);
+        switchScene('preview', { build: resolveBuild(activeBot(state)) });
+      }
+      break;
+    case 'buyslot':
+      if (buyGarageSlot(state)) {
+        sfx.spend();
+        persistAnd(renderGarage);
+      }
+      break;
+    case 'assemble': {
+      const input = $('assemble-name') as HTMLInputElement;
+      if (assembleBot(state, input.value || 'SPARE PARTS')) {
+        sfx.spend();
+        persistAnd(renderGarage);
+      }
+      break;
+    }
+    case 'hire':
+      if (hireCrew(state, Number(a.idx))) {
+        sfx.click();
+        persistAnd(renderCrew);
+      }
+      break;
+    case 'fire':
+      if (fireCrew(state, Number(a.idx))) {
+        sfx.click();
+        persistAnd(renderCrew);
+      }
+      break;
+    case 'promote':
+      if (promote(state)) {
+        sfx.sting(true);
+        persistAnd(renderLeague);
       }
       break;
     case 'fight': {
@@ -188,7 +254,7 @@ function onClick(e: MouseEvent): void {
       issueUiCommand(el);
       break;
     case 'continue':
-      advanceWeek(state);
+      weekReport = advanceWeek(state);
       report = null;
       setup = null;
       persistAnd(() => show('league'));
@@ -196,10 +262,51 @@ function onClick(e: MouseEvent): void {
   }
 }
 
+function onChange(e: Event): void {
+  const el = (e.target as HTMLElement).closest<HTMLSelectElement>('select[data-action="crewjob"]');
+  if (!el) return;
+  if (setCrewJob(state, Number(el.dataset.idx), el.value as CrewJob)) {
+    sfx.click();
+    persistAnd(renderCrew);
+  }
+}
+
 function persistAnd(rerender: () => void): void {
   saveGame(state);
   renderHud();
   rerender();
+}
+
+// --- Save transfer ---------------------------------------------------------------
+
+function exportSave(): void {
+  const json = JSON.stringify(state);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `botleague-save-week${state.week}.json`;
+  link.click();
+  URL.revokeObjectURL(url);
+  void navigator.clipboard?.writeText(json).catch(() => {});
+  sfx.click();
+}
+
+function importSave(): void {
+  const raw = window.prompt('Paste your exported save JSON:');
+  if (!raw) return;
+  try {
+    const candidate = migrate(JSON.parse(raw));
+    if (!Array.isArray(candidate.bots) || !candidate.bots.length || typeof candidate.week !== 'number') {
+      throw new Error('not a save');
+    }
+    state = candidate;
+    saveGame(state);
+    sfx.sting(true);
+    show('garage');
+  } catch {
+    window.alert('That did not look like a Bot League save. Nothing was changed.');
+  }
 }
 
 // --- Fight wiring ---------------------------------------------------------------
@@ -259,7 +366,8 @@ function updateCommandBar(): void {
 function renderHud(): void {
   const r = state.record;
   $('hud-stats').innerHTML =
-    `WEEK <b>${state.week}</b> &nbsp;·&nbsp; <b class="price">&#8373;${state.cash}</b>` +
+    `<b>${TIERS[state.tier].label.toUpperCase()}</b> &nbsp;·&nbsp; WEEK <b>${state.week}</b>` +
+    ` &nbsp;·&nbsp; <b class="price">&#8373;${state.cash}</b>` +
     ` &nbsp;·&nbsp; FAME <b>${state.fame}</b>${state.fame >= 3 ? ' (sponsored)' : ''}` +
     ` &nbsp;·&nbsp; <b>${r.wins}W-${r.losses}L</b>`;
 }
@@ -269,14 +377,29 @@ function condBar(c: number): string {
   return `<div class="bar${cls}"><i style="width:${Math.max(0, c)}%"></i></div>`;
 }
 
+function accentHex(accent: number): string {
+  return `#${accent.toString(16).padStart(6, '0')}`;
+}
+
 function renderGarage(): void {
-  const bot = state.bots[0];
+  const bot = activeBot(state);
   const s = statsFor(bot);
+
+  const botTabs =
+    state.bots.length > 1
+      ? `<div style="display:flex;gap:6px;margin-bottom:8px">${state.bots
+          .map(
+            (b, i) =>
+              `<button class="act ${i === state.activeBot ? 'primary' : ''}" data-action="botselect" data-idx="${i}">${b.name}</button>`,
+          )
+          .join('')}</div>`
+      : '';
+
   const rows = SLOTS.map((slot) => {
     const part = partById(bot.parts[slot]);
     const c = bot.condition[slot];
     const scrapped = c <= 0;
-    const cost = repairCost(bot.parts[slot], c);
+    const cost = repairCost(state, slot);
     const action = scrapped
       ? `<span class="scrapped">SCRAPPED</span>`
       : c >= 100
@@ -303,19 +426,36 @@ function renderGarage(): void {
         .join('')
     : `<div class="muted">Nothing in storage. The shop rotates weekly.</div>`;
 
+  // Second-bot block: buy the slot, then assemble from storage.
+  let expansion = '';
+  if (state.garageSlots < MAX_GARAGE_SLOTS) {
+    expansion = `<div class="item-row"><span class="muted">A second garage slot means a second bot — and a backup when this one's in pieces.</span>
+      <span></span>
+      <button class="act" data-action="buyslot" ${state.cash < GARAGE_SLOT_COST ? 'disabled' : ''}>BUY SLOT &#8373;${GARAGE_SLOT_COST}</button></div>`;
+  } else if (state.bots.length < state.garageSlots) {
+    expansion = canAssembleBot(state)
+      ? `<div class="item-row"><input id="assemble-name" placeholder="NAME YOUR BOT" maxlength="14"
+           style="background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:6px;padding:8px;font:inherit">
+           <span></span>
+           <button class="act primary" data-action="assemble">ASSEMBLE BOT</button></div>`
+      : `<div class="muted" style="padding:7px 0">Empty slot ready — stock one part of EVERY kind in storage to assemble a second bot.</div>`;
+  }
+
   $('garage-panel').innerHTML = `
-    <h2 style="color:#00e5ff">${bot.name}</h2>
+    ${botTabs}
+    <h2 style="color:${accentHex(bot.accent)}">${bot.name}</h2>
     <div class="statgrid">
       <div class="stat"><b>${s.hull}</b><span>HULL</span></div>
       <div class="stat"><b>${s.plating.toFixed(1)}</b><span>PLATING</span></div>
       <div class="stat"><b>${Math.round(s.speed)}</b><span>SPEED</span></div>
       <div class="stat"><b>${s.punch.toFixed(1)}</b><span>PUNCH</span></div>
       <div class="stat"><b>${Math.round(s.reactorCap)}/${s.reactorRegen.toFixed(1)}</b><span>REACTOR</span></div>
-      <div class="stat"><b>${s.wits.toFixed(2)}</b><span>WITS</span></div>
+      <div class="stat"><b>${s.wits.toFixed(2)}${bot.chipFamiliarity > 0 ? ` <span class="muted" style="font-size:10px">+fam ${bot.chipFamiliarity}</span>` : ''}</b><span>WITS</span></div>
     </div>
     ${rows}
     <h3 style="margin-top:12px" class="muted">STORAGE</h3>
-    ${inv}`;
+    ${inv}
+    ${expansion}`;
 }
 
 function renderShop(): void {
@@ -345,8 +485,74 @@ function statLine(partId: string): string {
   }
 }
 
+const JOB_BLURB: Record<CrewJob, string> = {
+  repair: 'cheaper fixes + salvage checks on scrapped parts',
+  tune: 'free condition recovery every week',
+  spar: 'chips learn their frames (Wits grows)',
+};
+
+function renderCrew(): void {
+  const crew = state.crew.length
+    ? state.crew
+        .map(
+          (c, i) => `<div class="item-row">
+          <span><b>${c.name}</b> <span class="muted">wrench ${c.wrench} · tuning ${c.tuning} · &#8373;${c.weeklyWage}/wk</span><br>
+            <span class="muted" style="font-size:11px">${JOB_BLURB[c.job]}</span></span>
+          <select data-action="crewjob" data-idx="${i}"
+            style="background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:6px;padding:8px;font:inherit">
+            <option value="repair" ${c.job === 'repair' ? 'selected' : ''}>REPAIR</option>
+            <option value="tune" ${c.job === 'tune' ? 'selected' : ''}>TUNE</option>
+            <option value="spar" ${c.job === 'spar' ? 'selected' : ''}>SPAR</option>
+          </select>
+          <button class="act danger" data-action="fire" data-idx="${i}">FIRE</button>
+        </div>`,
+        )
+        .join('')
+    : `<div class="muted" style="padding:7px 0">No crew. You're doing your own wrenching — full price, no salvage saves.</div>`;
+
+  const candidates = state.crewMarket.length
+    ? state.crewMarket
+        .map(
+          (c, i) => `<div class="item-row">
+          <span><b>${c.name}</b> <span class="muted">wrench ${c.wrench} · tuning ${c.tuning}</span></span>
+          <span class="price">&#8373;${c.weeklyWage}/wk</span>
+          <button class="act" data-action="hire" data-idx="${i}" ${state.crew.length >= MAX_CREW ? 'disabled' : ''}>HIRE</button>
+        </div>`,
+        )
+        .join('')
+    : `<div class="muted">Nobody's looking for work this week.</div>`;
+
+  $('crew-panel').innerHTML = `
+    <h2>PIT CREW <span class="muted">— ${state.crew.length}/${MAX_CREW}, wages due weekly</span></h2>
+    ${crew}
+    <h3 style="margin-top:12px" class="muted">LOOKING FOR WORK</h3>
+    ${candidates}`;
+}
+
 function renderLeague(): void {
-  const myStats = statsFor(state.bots[0]);
+  const myStats = statsFor(activeBot(state));
+  const tier = TIERS[state.tier];
+
+  // Week-opening report: what happened overnight (sponsor, wages, crew work).
+  let opening = '';
+  if (weekReport) {
+    const lines: string[] = [];
+    if (weekReport.sponsorPaid) lines.push(`sponsor stipend <b class="price">+&#8373;${weekReport.sponsorPaid}</b>`);
+    if (weekReport.wagesPaid) lines.push(`crew wages <b class="price">-&#8373;${weekReport.wagesPaid}</b>`);
+    if (weekReport.tunedBy) lines.push(`tune-up: all parts <b>+${weekReport.tunedBy}%</b>`);
+    if (weekReport.familiarityGained) lines.push(`sparring: familiarity <b>+${weekReport.familiarityGained}</b>`);
+    for (const name of weekReport.crewLeft) lines.push(`<span class="scrapped">${name} walked — unpaid wages</span>`);
+    if (lines.length) opening = `<div class="card"><span class="muted">Overnight: ${lines.join(' · ')}</span></div>`;
+  }
+
+  const promotion = canPromote(state)
+    ? `<div class="card" style="border-color:var(--hot)">
+        <b style="color:var(--hot)">PROMOTION OFFER</b>
+        <span class="muted">— your fame opened the door to ${TIERS[(state.tier + 1) as 2 | 3].label}. Bigger purses, harder steel. No way back down.</span>
+        <div style="margin-top:8px"><button class="act primary" data-action="promote">STEP UP</button></div>
+      </div>`
+    : '';
+
   const offers = state.card
     .map((o) => {
       const theirs = statsFor({
@@ -357,7 +563,7 @@ function renderLeague(): void {
       const cmp = (mine: number, their: number) =>
         `<span class="${mine >= their ? 'adv' : 'dis'}">${Math.round(their)}</span>`;
       return `<div class="card offer">
-        <div class="vs"><b style="color:#${o.accent.toString(16).padStart(6, '0')}">${o.botName}</b>
+        <div class="vs"><b style="color:${accentHex(o.accent)}">${o.botName}</b>
           <span class="muted">· ${o.builderName}${recTxt}</span></div>
         <div class="muted">&ldquo;${o.attitude}&rdquo;</div>
         <div class="intel">
@@ -373,9 +579,10 @@ function renderLeague(): void {
       </div>`;
     })
     .join('');
+
   $('league-panel').innerHTML =
-    `<div class="card"><h2>WEEK ${state.week} FIGHT CARD</h2>
-     <div class="muted">Pick your match. Intel shows THEIR numbers — green where you have the edge.</div></div>${offers}`;
+    `${opening}${promotion}<div class="card"><h2>${tier.label.toUpperCase()} — WEEK ${state.week}</h2>
+     <div class="muted">Fighting as <b style="color:${accentHex(activeBot(state).accent)}">${activeBot(state).name}</b> (switch bots in the garage). Intel shows THEIR numbers — green where you have the edge.</div></div>${offers}`;
 }
 
 function renderResults(): void {
@@ -384,10 +591,19 @@ function renderResults(): void {
   const dmg = r.damage
     .map((d) => {
       const delta = d.after - d.before;
+      const salvaged = r.salvaged.includes(d.slot);
       return `<div class="dmg-row">
         <span class="muted">${SLOT_LABEL[d.slot]}</span>
         ${condBar(d.after)}
-        <span>${d.before}% &rarr; ${d.after}% ${d.scrapped ? '<span class="scrapped">SCRAPPED!</span>' : delta < 0 ? `<span class="muted">(${delta}%)</span>` : ''}</span>
+        <span>${d.before}% &rarr; ${d.after}% ${
+          d.scrapped
+            ? '<span class="scrapped">SCRAPPED!</span>'
+            : salvaged
+              ? '<span style="color:var(--good)">SAVED BY THE CREW</span>'
+              : delta < 0
+                ? `<span class="muted">(${delta}%)</span>`
+                : ''
+        }</span>
       </div>`;
     })
     .join('');

@@ -9,6 +9,10 @@ import { CHIPS } from './chips';
 const NAME_FRONT = ['Rust', 'Mag', 'Volt', 'Gear', 'Scrap', 'Piston', 'Diesel', 'Socket', 'Crank', 'Brick'];
 const NAME_BACK = ['Bucket', 'Fang', 'Howl', 'Mauler', 'Royale', 'Biter', 'Widow', 'Hound', 'Queen', 'Jack'];
 
+export function randomBotName(rng: Rng): string {
+  return `${pick(rng, NAME_FRONT)} ${pick(rng, NAME_BACK)}`;
+}
+
 const ACCENTS = [0xffb300, 0x00e5ff, 0xff4d6d, 0x76ff03, 0xb388ff, 0xff8a30];
 
 export function randomBuild(rng: Rng, id: string, accentIdx: number): BotBuild {

@@ -141,8 +141,10 @@
     <header class="wrap">
       <h1>BOT LEAGUE</h1>
       <div id="hud-stats"></div>
-      <div style="display:flex;gap:8px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="act" id="btn-mute" data-action="mute"></button>
+        <button class="act" data-action="export">EXPORT</button>
+        <button class="act" data-action="import">IMPORT</button>
         <button class="act danger" data-action="newgame">NEW GAME</button>
       </div>
     </header>
@@ -150,6 +152,7 @@
     <nav class="wrap" id="tabs">
       <button data-action="tab" data-tab="garage">GARAGE</button>
       <button data-action="tab" data-tab="shop">SHOP</button>
+      <button data-action="tab" data-tab="crew">CREW</button>
       <button data-action="tab" data-tab="league">FIGHT NIGHT</button>
     </nav>
 
@@ -161,6 +164,10 @@
 
       <section id="screen-shop" class="screen hidden">
         <div id="shop-panel" class="card"></div>
+      </section>
+
+      <section id="screen-crew" class="screen hidden">
+        <div id="crew-panel" class="card"></div>
       </section>
 
       <section id="screen-league" class="screen hidden">

@@ -40,6 +40,8 @@ export function computeStats(bot: BotBuild): DerivedStats {
     punch: bot.weapon.damage * weaponScale * output,
     reactorCap: bot.core.capacity * (coreDisabled ? 0.5 : 1),
     reactorRegen: bot.core.regen * (coreDisabled ? 0.35 : coreScale),
-    wits: Math.min(1, 0.45 + bot.chip.grade * 0.12),
+    // Familiarity: a chip that has sparred with this frame aims better —
+    // up to +0.10 Wits at max familiarity (50).
+    wits: Math.min(1, 0.45 + bot.chip.grade * 0.12 + Math.min(50, bot.familiarity ?? 0) * 0.002),
   };
 }

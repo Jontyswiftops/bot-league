@@ -5,7 +5,7 @@
 
 import type { Slot } from '../sim/types';
 
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 
 /** A bot as persisted: part references + condition, not embedded part defs. */
 export interface SavedBot {
@@ -17,12 +17,18 @@ export interface SavedBot {
   chipFamiliarity: number;
 }
 
+export type CrewJob = 'repair' | 'tune' | 'spar';
+
 export interface SavedCrewMember {
   id: string;
   name: string;
+  /** 1–5: repair discounts and salvage-check odds on scrapped parts. */
   wrench: number;
+  /** 1–5: weekly condition recovery and sparring familiarity gains. */
   tuning: number;
   weeklyWage: number;
+  /** The one job this crew member runs each week. */
+  job: CrewJob;
 }
 
 export interface InventoryItem {
@@ -61,8 +67,12 @@ export interface GameState {
   fame: number;
   tier: 1 | 2 | 3;
   bots: SavedBot[];
+  /** Which bot fights this week's match. */
+  activeBot: number;
   garageSlots: number;
   crew: SavedCrewMember[];
+  /** This week's hireable candidates (regenerated weekly). */
+  crewMarket: SavedCrewMember[];
   inventory: InventoryItem[];
   /** This week's salvage market (items are removed when bought). */
   market: MarketItem[];
@@ -79,7 +89,14 @@ export interface GameState {
  * field = bump SAVE_VERSION and append one migration. Never edit old ones.
  */
 export const MIGRATIONS: Array<(raw: Record<string, unknown>) => Record<string, unknown>> = [
-  // index 0 migrates version 1 -> 2 (none yet)
+  // v1 -> v2: crew jobs, active-bot selection, weekly crew market.
+  (raw) => ({
+    ...raw,
+    version: 2,
+    activeBot: 0,
+    crewMarket: [],
+    crew: ((raw.crew as Array<Record<string, unknown>>) ?? []).map((c) => ({ job: 'tune', ...c })),
+  }),
 ];
 
 export function migrate(raw: Record<string, unknown>): GameState {
